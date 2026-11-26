@@ -3,8 +3,9 @@
 A three-reel slot machine for the MOS KIM-1, built for and tested on the
 PAL-2. It runs on the six built-in 7-segment LEDs and fits in the stock 1K.
 
-Status: design settled; `Programs/slots.s` is a stub that only checks the
-build.
+Status: playable. It has been tested in a 6502 emulator with the monitor's
+GETKEY stubbed out, but not yet on the PAL-2. The speeds and delays are
+first guesses, to be tuned on the hardware.
 
 ## Building
 
@@ -13,7 +14,7 @@ turns the binaries into a MOS Technology paper tape.
 
 In VS Code, open `Programs/slots.s` and run the default build task
 (Shift-Cmd-B). The tape lands in `build/slots.pap`. Load it on the PAL-2 and
-start at $0200.
+start at $0200. The tape also loads zero page, page 1 and $1780.
 
 `kim.cfg`, `Programs/kim.inc` and `.vscode/tasks.json` are copies from
 `KIM-1_Development`. If Slots moves there, only `slots.s` needs to be copied
@@ -109,6 +110,7 @@ The result is chosen when the spin starts. The reels are only a show.
   runs freely.
 - Read `TIMER_READ` ($1706) when the spin key goes down, and again when it
   comes up. Mix both reads into a 16-bit xorshift generator.
+- The generator is also stepped once every pass of the main loop.
 - Take each reel's stop (0–7) from the generator's high bits. The target
   index in the reel's table is `stop × 3`.
 - Keep the key-polling loop an odd number of cycles long, so the timer
@@ -125,8 +127,10 @@ The result is chosen when the spin starts. The reels are only a show.
                               READY ◀──── GO ──────────── LOST "LOSt"
 ```
 
-- **INTRO** shows `SLO7S`. Any key goes to READY.
-- **READY** shows the reels and the credits. Any key starts a spin.
+- **INTRO** shows ` SLO7S`. Any key goes to READY.
+- **READY** shows the reels and the credits. Pressing and releasing any key
+  starts a spin. The spin begins on the release, like letting go of a
+  lever.
 - **SPINNING** takes 1 credit and updates the display at once. It picks the
   three stops, then starts all reels at different speeds. Reel 1 runs a
   minimum time, then stops when its index reaches its target. Reels 2 and 3
@@ -136,7 +140,8 @@ The result is chosen when the spin starts. The reels are only a show.
   - Win: count the credits up one at a time, about 10 per second.
   - Big win (payout of 15 or more): the reels flash during the count-up.
   - When done, go to LOST if the credits are 0, otherwise to READY.
-- **LOST** holds the last reels a moment, then shows `LOSt`. GO resets the
+- **LOST** comes after SCORE's hold, so the losing reels are seen first,
+  then shows ` LOSt `. GO resets the
   credits to 20 and goes to READY.
 
 ST and RS are wired to the hardware, so they can't be game keys. "Any key"
@@ -150,7 +155,7 @@ masks below, reel 1 is the rightmost bit.
 | Win | Pattern | Effect |
 |---|---|---|
 | BAR BAR BAR | `%111 %000` | all reels blink |
-| 7 7 7 (faster) | `%011 %111 %101 %111 %110 %111` | a blank moves left to right |
+| 7 7 7 (faster) | `%110 %111 %101 %111 %011 %111` | a blank moves left to right |
 
 The same code runs both patterns. Only the table, its length and the rate
 differ.
@@ -169,10 +174,32 @@ differ.
 
 | Area | Use |
 |---|---|
-| $0000–$00EE | zero-page variables: reel indexes and targets, timers, PRNG, credits, state |
-| $0100–$01FF | stack |
-| $0200–$03FF | code and tables (72 bytes of reel tables) |
-| $1780–$17E5 | spare |
+| $0000–$006F | tables: reel frames, pay table, flash patterns, messages |
+| $0070–$0098 | variables (cleared at start) |
+| $0100–$018A | display: build the digits and scan them |
+| $018B–$01FF | stack |
+| $0200–$03DA | start, main loop, states, scoring |
+| $1780–$17CB | keys and random numbers |
+
+The code is about 690 bytes, too big for $0200–$03FF alone, so it is
+spread over these areas, as `baseball.s` does.
 
 The display is driven directly through `SAD`/`SBD`, without the monitor's
-display routines.
+display routines. Keys use the monitor's GETKEY with port A switched to
+inputs, as in `horserace.s`.
+
+## Timing
+
+One pass of the main loop reads the keys, runs the current state and scans
+the six digits once, about 1 ms each. A pass is about 6.5 ms. Every rate is
+a count of passes, set at the top of `slots.s`:
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `SPEED1`–`SPEED3` | 4, 5, 6 | passes per frame for each reel |
+| `SPIN_FIRST` | 150 | minimum spin before reel 1 may stop (~1 s) |
+| `STOP_GAP` | 120 | wait before the next reel may stop (~0.8 s) |
+| `COUNT_RATE` | 15 | passes per counted credit (~10/s) |
+| `HOLD` | 110 | pause after the result (~0.7 s) |
+| `BAR_RATE`, `SEVEN_RATE` | 20, 10 | flash step rates |
+| `DEBOUNCE` | 8 | passes of "no key" before a release counts |
