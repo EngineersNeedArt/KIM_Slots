@@ -19,6 +19,16 @@
 ;           free-running at 1 MHz) is mixed in when the spin key goes down
 ;           and again when it comes up.  The three stops are chosen then; the
 ;           reels only show the result.
+; PAYOUTS   bet 1 credit; the payout is the credits paid back.  Odds are out
+;           of 512 (8 x 8 x 8 stops).  Cherries only count from the left:
+;             7    7    7     pays 50     1 way
+;             BAR  BAR  BAR   pays 15     4 ways
+;             ||   ||   ||    pays  5    12 ways
+;             d    d    d     pays  4    27 ways
+;             d    d    any   pays  2    45 ways  (reel 3 not a cherry)
+;             d    any  any   pays  1   120 ways  (reel 2 not a cherry)
+;           Anything else pays nothing, e.g. "|| d d" or "7 7 BAR".
+;           209 wins in 512; returns 488/512, about 95%.
 ;
 ; Assembles with ca65 (plain 6502) and kim.inc.  To move it into
 ; KIM-1_Development, copy this file into its Programs folder; nothing else
@@ -29,9 +39,7 @@
 
 ; ---- tuning (counts are passes of ~6.5 ms) ----------------------------------
 START_CREDITS = $20         ; BCD, 0-99
-SPEED1      = 4             ; passes per frame, reel 1 (3 frames per symbol)
-SPEED2      = 5             ; reel 2
-SPEED3      = 6             ; reel 3
+SPEED       = 10            ; passes per frame, all reels (3 frames per symbol)
 SPIN_FIRST  = 150           ; minimum spin before reel 1 may stop (~1 s)
 STOP_GAP    = 120           ; then each next reel may stop this much later
 COUNT_RATE  = 15            ; count-up: one credit per this many (~10/s)
@@ -210,7 +218,7 @@ spin:   lda stoptimer
         bcc @next               ; reel is already stopped
         dec rcnt,x
         bne @next
-        lda speeds,x
+        lda #SPEED
         sta rcnt,x
         ldy ridx,x              ; next frame, wrapping at 24
         iny
@@ -504,7 +512,6 @@ reels:
         .byte $5E,$63,$15, $36,$22,$0C, $5E,$63,$15, $36,$2A,$44
         .byte $07,$02,$14, $36,$22,$0C, $5E,$6B,$49, $49,$41,$0D
 roff:   .byte 0, 24, 48         ; each reel's start in reels
-speeds: .byte SPEED1, SPEED2, SPEED3
 
 ; three of a kind: symbol and payout (x = 0 and 1 flash)
 sym_tab:.byte SEVEN, BAR, TOOTH, CHERRY

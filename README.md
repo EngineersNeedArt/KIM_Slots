@@ -132,7 +132,7 @@ The result is chosen when the spin starts. The reels are only a show.
   starts a spin. The spin begins on the release, like letting go of a
   lever.
 - **SPINNING** takes 1 credit and updates the display at once. It picks the
-  three stops, then starts all reels at different speeds. Reel 1 runs a
+  three stops, then starts all reels at the same speed. Reel 1 runs a
   minimum time, then stops when its index reaches its target. Reels 2 and 3
   each stop about a second after the reel before them. Keys are ignored.
 - **SCORE**
@@ -174,11 +174,11 @@ differ.
 
 | Area | Use |
 |---|---|
-| $0000–$006F | tables: reel frames, pay table, flash patterns, messages |
-| $0070–$0098 | variables (cleared at start) |
+| $0000–$006C | tables: reel frames, pay table, flash patterns, messages |
+| $006D–$0095 | variables (cleared at start) |
 | $0100–$018A | display: build the digits and scan them |
 | $018B–$01FF | stack |
-| $0200–$03DA | start, main loop, states, scoring |
+| $0200–$03D9 | start, main loop, states, scoring |
 | $1780–$17CB | keys and random numbers |
 
 The code is about 690 bytes, too big for $0200–$03FF alone, so it is
@@ -196,7 +196,7 @@ a count of passes, set at the top of `slots.s`:
 
 | Constant | Value | Meaning |
 |---|---|---|
-| `SPEED1`–`SPEED3` | 4, 5, 6 | passes per frame for each reel |
+| `SPEED` | 10 | passes per frame, the same for all reels (~65 ms) |
 | `SPIN_FIRST` | 150 | minimum spin before reel 1 may stop (~1 s) |
 | `STOP_GAP` | 120 | wait before the next reel may stop (~0.8 s) |
 | `COUNT_RATE` | 15 | passes per counted credit (~10/s) |
